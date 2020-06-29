@@ -1,0 +1,24 @@
+{
+  "name": "hello-world",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack",
+    "start": "npx http-server -p 5000"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-loader": "^6.0.4",
+    "typescript": "^3.5.2",
+    "webpack": "^4.35.0",
+    "webpack-cli": "^3.3.5"
+  },
+  "dependencies": {
+    "babylonjs": "^4.0.3",
+    "babylonjs-gui": "^4.0.3"
+  }
+}
