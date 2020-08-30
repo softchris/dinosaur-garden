@@ -1,5 +1,5 @@
 import { Ball } from "./objects/ball";
-import { getDistance, isColliding } from "./util";
+import { getDistance, isColliding } from "./services/util";
 import { createAnnouncement } from "./announcement-mock";
 import { Box } from "./objects/box";
 import { Game } from "./game";

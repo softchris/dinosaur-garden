@@ -5,7 +5,7 @@ import { Ball } from "./objects/ball";
 import { Box } from './objects/box';
 
 import {level } from './levels/level1';
-import { createGoalMesh } from './util'
+import { createGoalMesh } from './services/util'
 import { GameLogic } from "./gameLogic";
 import { Camera } from "./camera";
 import { Tree } from "./objects/tree";
