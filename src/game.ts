@@ -3,17 +3,15 @@ import "babylonjs-loaders";
 import * as GUI from 'babylonjs-gui';
 
 import { Ball } from "./objects/ball";
-
 import { Box } from './objects/box';
 
 import {level } from './levels/level1';
-import { createGoalMesh } from './util'
+import { createGoalMesh } from './services/util'
 import { GameLogic } from "./gameLogic";
 import { Camera } from "./camera";
 import { Tree } from "./objects/tree";
 import { Dino } from './objects/dino';
 import { GameObject } from "./objects/gameObject";
-import { imageProcessingDeclaration } from 'babylonjs/Shaders/ShadersInclude/imageProcessingDeclaration';
 
 enum Keys {
   ArrowRight = 'ArrowRight',
