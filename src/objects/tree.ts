@@ -1,12 +1,20 @@
-export class Tree {
-  _meshes:BABYLON.AbstractMesh[];
+import * as BABYLON from 'babylonjs';
+import { GameObject } from "./gameObject";
+
+export class Tree extends GameObject {
   constructor(
-    private name: string, 
+    name: string, 
     private _scene: BABYLON.Scene, 
     private _light: BABYLON.IShadowLight,
     scaling: number,
-    position: BABYLON.Vector3
+    position: BABYLON.Vector3,
+    description: string
   ) {
+    super(
+      name,
+      description,
+      "https://cambridgestorage.blob.core.windows.net/images/old-tree.jpeg"
+    );
     // set up over and out effects
     var makeOverOut = function (mesh: BABYLON.AbstractMesh) {
       // var oldVal = mesh.scaling; 
@@ -32,23 +40,23 @@ export class Tree {
       // mesh.actionManager.registerAction(new BABYLON.InterpolateValueAction(BABYLON.ActionManager.OnPointerOverTrigger, mesh, "scaling", new BABYLON.Vector3(oldVal.x * 1.1, oldVal.y * 1.1, oldVal.z * 1.1), 150));
     }
 
-    var shadowGenerator = new BABYLON.ShadowGenerator(1024, this._light);
-    BABYLON.SceneLoader.ImportMesh("", "/models/", "BubingaTree.obj", this._scene, (meshes, particleSystems, skeletons) => {
+    // var shadowGenerator = new BABYLON.ShadowGenerator(1024, this._light);
+    BABYLON.SceneLoader.ImportMesh("", "/models/", "tree.obj", this._scene, (meshes, particleSystems, skeletons) => {
       console.log('tree loaded')
-      this._meshes = meshes;
+      this.meshes = meshes;
 
       for (var i = 0; i < meshes.length; i++) {
 
         // scale and position
-        meshes[i].scaling = new BABYLON.Vector3(scaling, scaling, scaling);
-        meshes[i].position =  position;
+        this.meshes[i].scaling = new BABYLON.Vector3(scaling, scaling, scaling);
+        this.meshes[i].position =  position;
         
         // set up shadow
-        shadowGenerator.addShadowCaster(this._meshes[i]);
-        shadowGenerator.useContactHardeningShadow = true;
+        // shadowGenerator.addShadowCaster(this._meshes[i]);
+        // shadowGenerator.useContactHardeningShadow = true;
 
         // set up hover in/out action
-        meshes[i].actionManager = new BABYLON.ActionManager(this._scene)
+        this.meshes[i].actionManager = new BABYLON.ActionManager(this._scene)
 
         makeOverOut(meshes[i]);
       }      

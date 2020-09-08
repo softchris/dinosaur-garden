@@ -1,4 +1,6 @@
-///<reference path="../babylon.d.ts" />
+import * as BABYLON from 'babylonjs';
+import "babylonjs-loaders";
+import * as GUI from 'babylonjs-gui';
 
 import { Ball } from "./objects/ball";
 
@@ -9,32 +11,9 @@ import { createGoalMesh } from './util'
 import { GameLogic } from "./gameLogic";
 import { Camera } from "./camera";
 import { Tree } from "./objects/tree";
-import { KeyPropertySet } from "babylonjs-gui";
-
-// CHECK find a way to switch between game object, click to select
-// CHECK drag n drop?
-
-// CHECK DINO park, add dinos and trees
-// CHECK move things around:
-// CHECK decide position, size, 
-// rotation
-
-// load world from file with trees and mountains
-// log out selected objects position and scale
-// find a way to circle between different things to build and indicate it, console log between options?
-// circle between a world builder camera and an FPS one
-
-
-
-
-// better lighting
-// destroy completed level: clean up new level
-// load new level
-// color on the target
-// HUD?
-// Skybox?
-// move with a speed?
-// monsters?
+import { Dino } from './objects/dino';
+import { GameObject } from "./objects/gameObject";
+import { imageProcessingDeclaration } from 'babylonjs/Shaders/ShadersInclude/imageProcessingDeclaration';
 
 enum Keys {
   ArrowRight = 'ArrowRight',
@@ -43,7 +22,9 @@ enum Keys {
   ArrowDown = 'ArrowDown',
   New = 'n',
   Increase = 'a',
-  Decrease = 'z'
+  Decrease = 'z',
+  ShowUI = 'Enter',
+  HideUI = 'Escape'
 };
 
 class GameActions {
@@ -84,7 +65,7 @@ class GameActions {
       }
 
       if (evt.sourceEvent.key === 'b') {
-        this._game.toogleBoundingBoxes();
+        this._game.toggleBoundingBoxes();
       }
 
       if(evt.sourceEvent.key === Keys.New) {
@@ -98,10 +79,15 @@ class GameActions {
       if (evt.sourceEvent.key === Keys.Decrease) {
         this.decreaseObject();
       }
-      
-    }));
 
-    
+      if(evt.sourceEvent.key === Keys.ShowUI) {
+        this._game.loadUIInfo();
+        this._game.toggleUI(true);
+      }
+      if (evt.sourceEvent.key === Keys.HideUI) {
+        this._game.toggleUI(false);
+      }
+    }));
 
     this._scene.onBeforeRenderObservable.add((eventData) => {
       
@@ -128,32 +114,28 @@ class GameActions {
   }
 
   private decreaseObject() {
-    const { x, y, z } = this._game.currentObject.scaling;
-    // if(x - 0.4 < 0) { return; }
-
-    this._game.currentObject.scaling = new BABYLON.Vector3(x * 0.8, y * 0.8, z * 0.8);
+    this._game.selectedObject.scale(0.8);
   }
   private increaseObject() {
-    // increase with a percentage, like 20%
-    if(this._game.currentObject) {
-      const { x, y, z } = this._game.currentObject.scaling;
-      this._game.currentObject.scaling = new BABYLON.Vector3(x * 1.2, y * 1.2, z * 1.2);
+    if (this._game.selectedObject) {
+      this._game.selectedObject.scale(1.2);
     }
   }
 
-  // TODO move currentObject instead if camera is off
   private handleKey(positionKey, change) {
-    this._game.currentObject.position[positionKey] += change;
-
-    // this._game.ball.move(positionKey, change);
-    // this._ball._sphere.position[positionKey] += change
-    // this.gameLogic.handleCollision();
-    // this.gameLogic.checkGoalReached()
+    // TODO do this to GameObject instead
+    // we should find the gameObject, and us move method, that moves all meshes, not just one.
+    if (this._game.selectedObject) {
+      this._game.selectedObject.move(positionKey, change); 
+    }
+    // this._game.currentObject.position[positionKey] += change;
   }
 
   private createTree() {
     const pos = this.getGroundPosition();
-    new Tree('new tree', this._scene, this._game.light, 1, pos);
+    pos.y += 5;
+    const tree = new Tree(`tree ${this._game._gameObjects.length}`, this._scene, this._game.light, 15, pos, "A tree");
+    this._game._gameObjects.push(tree);
   }
 
   private getGroundPosition () {
@@ -172,13 +154,15 @@ class GameActions {
 class DragnDrop {
   startingPoint;
   currentMesh: BABYLON.Mesh;
+  _selectedObject: GameObject | null;
   private _highlight: BABYLON.HighlightLayer;
 
   constructor(
     private _scene: BABYLON.Scene, 
     private _ground:BABYLON.Mesh,
-    private _camera:BABYLON.Camera,
-    private _canvas: HTMLCanvasElement
+    private _camera:Camera,
+    private _canvas: HTMLCanvasElement,
+    private _game: Game
   ) {
     this._canvas.addEventListener("pointerdown", this.onPointerDown.bind(this), false);
     this._canvas.addEventListener("pointerup", this.onPointerUp.bind(this), false);
@@ -186,6 +170,21 @@ class DragnDrop {
 
     this._highlight = new BABYLON.HighlightLayer("hl1", this._scene);
 
+  }
+
+  setSelectedObject(mesh: BABYLON.Mesh) {
+    this.currentMesh = mesh;
+    if(mesh === null) {
+      this._selectedObject = null;
+      return;
+    }
+
+    for (let index = 0; index < this._game._gameObjects.length; index++) {
+      const gameObject = this._game._gameObjects[index];
+      if (gameObject.isMeshInObject(this.currentMesh)) {
+        this._selectedObject = gameObject;
+      }
+    }
   }
 
   getGroundPosition () {
@@ -208,31 +207,39 @@ class DragnDrop {
         return;
     }
 
-    // check if we are under a mesh
-    var pickInfo = this._scene.pick(
-      this._scene.pointerX, 
-      this._scene.pointerY, (mesh) => { return mesh !== this._ground; });
+    // only do this when camera is detached
+    if (this._camera.isCamera) {
+      return;
+    }
+      // check if we are under a mesh
+      var pickInfo = this._scene.pick(
+        this._scene.pointerX,
+        this._scene.pointerY,
+        (mesh) => {
+          return mesh !== this._ground;
+        }
+      );
     if (pickInfo.hit) {
         if(this.currentMesh) {
           this.removeHighlight(this.currentMesh)
           // deselect
           if(this.currentMesh == pickInfo.pickedMesh) {
-            this.currentMesh = null;
+            this.setSelectedObject(null);
+            // this.currentMesh = null;
             return;
           }
         }
 
-        this.currentMesh = <BABYLON.Mesh>pickInfo.pickedMesh;
-        this.addHighlight(this.currentMesh);
-
-        // highlight object
+        this.setSelectedObject(<BABYLON.Mesh>pickInfo.pickedMesh);
+        console.log('Current object is', this._selectedObject.name);
         
+        this.addHighlight(this.currentMesh);
 
         this.startingPoint = this.getGroundPosition();
 
         if (this.startingPoint) { // we need to disconnect camera from canvas
           setTimeout(() => {
-              this._camera.detachControl(this._canvas);
+              // this._camera.detachControl(this._canvas);
           }, 0);
         }
     }
@@ -240,7 +247,7 @@ class DragnDrop {
 
   onPointerUp () {
     if (this.startingPoint) {
-      this._camera.attachControl(this._canvas, true);
+      // this._camera.attachControl(this._canvas, true);
       this.startingPoint = null;
       return;
     }
@@ -258,16 +265,20 @@ class DragnDrop {
     }
 
     var diff = current.subtract(this.startingPoint);
+
+    // TODO do this to GameObject instead
     this.currentMesh.position.addInPlace(diff);
 
     this.startingPoint = current;
   }
 
   addHighlight(mesh: BABYLON.Mesh) {
+    // TODO do this to GameObject instead
     this._highlight.addMesh(mesh, BABYLON.Color3.Green());
   }
 
   removeHighlight(mesh: BABYLON.Mesh) {
+    // TODO do this to GameObject instead
     this._highlight.removeMesh(mesh);
   }
 }
@@ -282,16 +293,34 @@ export class Game {
   private _target: BABYLON.Mesh;
   private _boxes: Box[];
   private _plane: BABYLON.Mesh;
-  private _dnd:DragnDrop
+  private _dnd: DragnDrop;
+  _gameObjects: GameObject[];
 
   constructor(canvasElement: string) {
     // Create canvas and engine.
     this._canvas = document.getElementById(canvasElement) as HTMLCanvasElement;
     this._engine = new BABYLON.Engine(this._canvas, true);
+    this._gameObjects = new Array<GameObject>();
+  }
+
+  loadUIInfo() {
+    if (this._dnd._selectedObject) {
+      this.label.text = this._dnd._selectedObject.description;
+      this.grid.removeControl(this.image);
+      this.image = new GUI.Image("image", this._dnd._selectedObject.imageUrl);
+      this.image.width = "400px";
+      this.grid.addControl(this.image, 1, 0);
+      // this.image. = ;
+      // TODO set image url too.. 
+    }
   }
 
   get light() {
     return this._light;
+  }
+
+  get selectedObject() {
+    return this._dnd._selectedObject;
   }
 
   get currentObject() {
@@ -311,39 +340,74 @@ export class Game {
   }
 
   private createGameFromLevel(boxes: Box[]) {
-    level.boxes.forEach(l => {
-      var materialPlane = new BABYLON.StandardMaterial("texturePlane", this._scene);
-      materialPlane.diffuseTexture = new BABYLON.Texture("textures/wood.jpg", this._scene);
-      boxes.push(new Box(this._scene, l.x * 5, l.y * 6, materialPlane, l.gates));
-    })
+    level.boxes.forEach((l) => {
+      var materialPlane = new BABYLON.StandardMaterial(
+        "texturePlane",
+        this._scene
+      );
+      materialPlane.diffuseTexture = new BABYLON.Texture(
+        "textures/wood.jpg",
+        this._scene
+      );
+      boxes.push(
+        new Box(this._scene, l.x * 5, l.y * 6, materialPlane, l.gates)
+      );
+    });
 
     this._target = createGoalMesh(level.target, this._scene);
   }
 
-  private createRandomGame() {
-    for (var rows = 0; rows < 10; rows++) {
-      for (var cols = 0; cols < 10; cols++) {
-        var materialPlane = new BABYLON.StandardMaterial("texturePlane", this._scene);
-        materialPlane.diffuseTexture = new BABYLON.Texture("textures/wood.jpg", this._scene);
-
-        this._boxes.push(new Box(this._scene, rows * 5, cols * 6, materialPlane));
-      }
-    }
-
-    this.openGates(300);
-  }
-
-  private openGates(noOfGates: number) {
-    for (var i = 0; i < noOfGates; i++) {
-      let index = Math.max(0, Math.floor(this._boxes.length * Math.random()));
-      this._boxes[index].openGate();
-    }
-  }
-
-  toogleBoundingBoxes() {
-    this._boxes.forEach(gameObject => {
+  toggleBoundingBoxes() {
+    this._boxes.forEach((gameObject) => {
       gameObject.toggleBoundingBox();
-    })
+    });
+  }
+
+  private grid: GUI.Grid;
+  private ui: GUI.AdvancedDynamicTexture;
+  private image: GUI.Image;
+  private label: GUI.TextBlock;
+
+  toggleUI(visible: boolean) {
+    this.grid.isVisible = visible;
+  }
+
+  createUI(message: string) {
+    // TODO switch content
+
+    // TODO add text + image, can we center it?
+    this.image = new GUI.Image("but", "textures/diplo.png");
+    //image.top = "0px";
+    /// image.left = "0px";
+    this.image.width = "500px";
+    // image.height = "100px";
+    this.image.cellId = 1;
+    this.image.cellHeight = 64;
+    this.image.cellWidth = 64;
+    //image.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_TOP;
+    // image.stretch = GUI.Image.STRETCH_EXTEND;
+
+    this.label = new GUI.TextBlock();
+    // label.top = "101px";
+    // label.width = "300px";
+    this.label.text = "Here's a dino";
+    this.label.color = "white";
+    this.label.fontSize = 24;
+
+    // label.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
+
+    this.grid = new GUI.Grid();
+    // grid.addColumnDefinition(300, true);
+    // grid.addColumnDefinition(0.5);
+    this.grid.addColumnDefinition(1.0);
+    //grid.addColumnDefinition(300, true);
+    this.grid.addRowDefinition(0.2);
+    this.grid.addRowDefinition(0.8);
+
+    this.grid.addControl(this.label, 0, 0);
+    this.grid.addControl(this.image, 1, 0);
+
+    this.ui.addControl(this.grid);
   }
 
   createScene(): void {
@@ -354,32 +418,51 @@ export class Game {
     this.createGameFromLevel(this._boxes);
     this._camera = new Camera(this._scene, this._canvas);
 
-    // Attach the camera to the canvas.
-    // this._camera.attachControl(this._canvas, false);
-
-    // Create a basic light, aiming 0,1,0 - meaning, to the sky.
     //this._light = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(0, 1, 0), this._scene);
-    this._light = new BABYLON.DirectionalLight("dir01", new BABYLON.Vector3(-1, -2, -1), this._scene);
+    this._light = new BABYLON.DirectionalLight(
+      "dir01",
+      new BABYLON.Vector3(-1, -2, -1),
+      this._scene
+    );
     this._light.position = new BABYLON.Vector3(20, 40, 20);
     this._light.intensity = 0.5;
 
-    const otherLight = new BABYLON.DirectionalLight("dir02", new BABYLON.Vector3(-100, -2, 50), this._scene);
+    const otherLight = new BABYLON.DirectionalLight(
+      "dir02",
+      new BABYLON.Vector3(-100, -2, 50),
+      this._scene
+    );
     otherLight.position = new BABYLON.Vector3(-80, 100, 60);
     otherLight.intensity = 0.9;
 
-    
+    const PLANE_SIZE = 200;
 
     //Creation of a plane
-    // TODO smaller plane
-    this._plane = BABYLON.Mesh.CreatePlane("plane", 200, this._scene);
+    this._plane = BABYLON.Mesh.CreatePlane("plane", PLANE_SIZE, this._scene);
     this._plane.position.y = -5;
     this._plane.rotation.x = Math.PI / 2;
 
+    // var planeSize = { width: 5, height: 5 };
+    // var plane = BABYLON.MeshBuilder.CreatePlane("plane1", { width: planeSize.width, height: planeSize.height }, scene);
+    this.ui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+    // advancedTexture.background = "yellow";
+
+    // button.background = "green";
+
+    this.createUI("");
+    this.toggleUI(false);
+
     //Creation of a repeated textured material
-    var materialPlane = new BABYLON.StandardMaterial("texturePlane", this._scene);
-    materialPlane.diffuseTexture = new BABYLON.Texture("textures/ground.jpg", this._scene);
+    var materialPlane = new BABYLON.StandardMaterial(
+      "texturePlane",
+      this._scene
+    );
+    materialPlane.diffuseTexture = new BABYLON.Texture(
+      "textures/ground.jpg",
+      this._scene
+    );
     materialPlane.diffuseTexture.scale(2);
-    materialPlane.backFaceCulling = false;//Always show the front and the back of an element
+    materialPlane.backFaceCulling = false; //Always show the front and the back of an element
 
     this._plane.material = materialPlane;
     this._plane.receiveShadows = true;
@@ -387,73 +470,37 @@ export class Game {
 
     this._ball = new Ball(this._scene, this._light);
 
-    var gameLogic = new GameLogic(
-      this._target,
-      this,
-      this._boxes
-    );
+    var gameLogic = new GameLogic(this._target, this, this._boxes);
 
     // Keyboard events
     const gameActions = new GameActions(
-      this._scene, 
-      this._camera, 
-      gameLogic, 
-      this._ball, 
-      this);
+      this._scene,
+      this._camera,
+      gameLogic,
+      this._ball,
+      this
+    );
 
+    this._gameObjects.push(new Dino("Dino", this._scene));
 
-    // TODO don't load this  
-    // BABYLON.SceneLoader.ImportMesh("", "/models/", "model.gltf", this._scene, (meshes, particleSystems, skeletons) => {
-    //   console.log('island loaded');
-    //   for (var i = 0; i < meshes.length; i++) {
-    //     meshes[i].scaling = new BABYLON.Vector3(10, 10, 10);
-    //     meshes[i].position = new BABYLON.Vector3(10, -12, -10);
-    //   }
-    // });
+    // create trees
+    for (var i = 0; i < 5; i++) {
+      let randomX = -100 + Math.floor(Math.random() * PLANE_SIZE);
+      let randomZ = -100 + Math.floor(Math.random() * PLANE_SIZE);
+      let randomPos = new BABYLON.Vector3(randomX, 5, randomZ);
 
-    BABYLON.SceneLoader.ImportMesh("", "/models/", "NOVELO_DIPLODOCUS.obj", this._scene, (meshes, particleSystems, skeletons) => {
-      console.log('dino loaded')
-      if(meshes.length > 0) {
-        for(var i=0; i< meshes.length; i++) {
-          meshes[i].scaling = new BABYLON.Vector3(0.05, 0.05, 0.05);
-        }
-        meshes[0].position = new BABYLON.Vector3(20, 20, -50);
-        meshes[1].position = new BABYLON.Vector3(20, 20, -50);
-        meshes[2].position = new BABYLON.Vector3(20, 20, -50);
-        
-        // var dino = meshes[0];
-        // dino.scaling = new BABYLON.Vector3(0.1, 0.1, 0.1);
-        // dino.position = new BABYLON.Vector3(50, 0, -20);
-      }
-      
-      // do something with the meshes and skeletons
-      // particleSystems are always null for glTF assets
-    });
-
-    for(var i=0; i< 5; i++) {
-      
-      let randomSize = Math.floor(Math.random() * 3) + 1;
-      let randomX = -100 + Math.floor(Math.random() * 200);
-      let randomZ = -100+ Math.floor(Math.random() * 200);
-      let randomPos = new BABYLON.Vector3(randomX, 0, randomZ);
-
-      new Tree(`tree ${i}`, this._scene, this._light, randomSize, randomPos);
+      this._gameObjects.push(
+        new Tree(`tree ${i}`, this._scene, this._light, 15, randomPos, "A tree")
+      );
     }
 
     this._dnd = new DragnDrop(
-      this._scene, 
-      this._plane, 
-      this._camera.camera, 
-      this._canvas
+      this._scene,
+      this._plane,
+      this._camera,
+      this._canvas,
+      this
     );
-
-    // BABYLON.SceneLoader.ImportMesh("","/models/", "BubingaTree.obj", this._scene, function(meshes, particleSystems, skeletons) {
-    //   console.log('tree loaded')
-    //   for (var i = 0; i < meshes.length; i++) {
-    //     meshes[i].scaling = new BABYLON.Vector3(1, 1, 1);
-    //     meshes[i].position = new BABYLON.Vector3(0, 0, 50); 
-    //   }
-    // })
   }
 
   doRender(): void {
@@ -463,7 +510,7 @@ export class Game {
     });
 
     // The canvas/window resize event handler.
-    window.addEventListener('resize', () => {
+    window.addEventListener("resize", () => {
       this._engine.resize();
     });
   }

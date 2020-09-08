@@ -1,3 +1,5 @@
+import * as BABYLON from 'babylonjs';
+
 export class Box {
   private _top: BABYLON.Mesh;
   private _meshes = new Array<{ alive: boolean, mesh: BABYLON.Mesh }>();

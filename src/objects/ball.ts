@@ -1,3 +1,5 @@
+import * as BABYLON from 'babylonjs';
+
 export class Ball {
   _sphere: BABYLON.Mesh;
   _isDead;

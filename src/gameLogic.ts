@@ -3,6 +3,7 @@ import { getDistance, isColliding } from "./util";
 import { createAnnouncement } from "./announcement-mock";
 import { Box } from "./objects/box";
 import { Game } from "./game";
+import * as BABYLON from 'babylonjs';
 
 export class GameLogic {
   constructor(

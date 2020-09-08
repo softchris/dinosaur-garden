@@ -1,3 +1,5 @@
+import * as BABYLON from 'babylonjs';
+
 export class Camera {
   private _camera: BABYLON.FreeCamera;
   private _isCamera = false;
