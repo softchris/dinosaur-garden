@@ -39,4 +39,4 @@ There are two modes:
 - `Mouse click`, clicking an object selects it.
 - `Mouse drag`, mouse drag an object moves it in the X and Z axis.
 
-![Demo of the simulation](https://cambridgestorage.blob.core.windows.net/images/dino-garden.gif)
+![Demo of the simulation](dino-garden.gif)
