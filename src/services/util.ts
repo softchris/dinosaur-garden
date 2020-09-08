@@ -1,6 +1,6 @@
-import { Box } from "./objects/box";
-import { Ball } from "./objects/ball";
 import * as BABYLON from 'babylonjs';
+import { Box } from "../objects/box";
+import { Ball } from "../objects/ball";
 
 export const createGoalMesh = (target, scene: BABYLON.Scene) => {
   var cone = BABYLON.MeshBuilder.CreateCylinder("cone", { diameterTop: 0, height: 1, tessellation: 96 }, scene);

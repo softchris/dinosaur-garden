@@ -11,6 +11,14 @@
       "es2015.promise",
       "es5"
     ],
+    "jsx": "react",
+    "strict": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "strictNullChecks": false,
+    "strictFunctionTypes": true,
+    "skipLibCheck": true,
+    "preserveConstEnums": true
   },
   "types": [
     "babylonjs",
